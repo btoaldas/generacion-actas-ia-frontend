@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 
 const KNOWLEDGE_BASE_CONTENT = {
@@ -481,136 +482,421 @@ services:
 
 # ... (volúmenes) ...
 </code></pre>`
-    }
+    },
+    {
+      id: 'infra-diagram',
+      title: 'Diagrama de Infraestructura y Flujo de Datos',
+      content: `Este diagrama ilustra la arquitectura completa del sistema SAAP y cómo los diferentes componentes interactúan entre sí, desde la petición del usuario hasta el procesamiento de datos por la IA.\n\n<pre class="bg-gray-900 text-sm text-cyan-300 p-4 rounded-md overflow-x-auto"><code>
++-----------------+      +------------------------+      +---------------------+
+| Usuario (Admin, |      | Navegador Web          |      | Servidor Web (Nginx)|
+| Editor, Visor)  |----->| (React Frontend)       |----->| (Sirve archivos     |
++-----------------+      +------------------------+      | estáticos)          |
+                             |           ^               +---------------------+
+                             |           |                      |
+                             | API Calls |                      |
+                             | (HTTPS)   |               (Reverse Proxy)
+                             |           |                      |
+                             v           |                      v
++------------------------+      +------------------------+      +---------------------+
+| Backend API (FastAPI)  |<---->| Base de Datos (PostDB) |      | Servicios Externos  |
+| (Lógica de Negocio)    |      | (Usuarios, Actas, etc.)|      | (APIs de IA)        |
++------------------------+      +------------------------+      | - Google Gemini     |
+     |           ^                                              | - OpenAI Whisper    |
+     |           |                                              +---------------------+
+     | Tareas    |                                                      ^
+     | Asíncronas|                                                      |
+     v           |                                                      |
++------------------------+      +------------------------+              |
+| Cola de Tareas (Redis) |<---->| Worker (Celery)        |--------------+
+| (Broker de Mensajes)   |      | (Procesa Transcripción |
++------------------------+      | y Generación de IA)    |
+                               +------------------------+
+</code></pre>
+**Flujo de Datos Principal (Generación de Acta):**
+1.  El **Usuario** sube un archivo de audio a través del **Frontend de React**.
+2.  El Frontend envía el archivo y los metadatos al **Backend API (FastAPI)**.
+3.  El Backend guarda los metadatos en **PostgreSQL** y crea una tarea de procesamiento.
+4.  La tarea se envía a la cola de **Redis**.
+5.  Un **Worker de Celery** toma la tarea de Redis.
+6.  El Worker se comunica con los **Servicios Externos de IA** (Whisper para transcripción, Gemini/OpenAI para generación) para procesar el audio y generar el contenido.
+7.  El Worker actualiza el estado del acta en la **Base de Datos PostgreSQL**.
+8.  El **Frontend** consulta periódicamente el **Backend API** para obtener el estado del acta y muestra el resultado al usuario cuando está listo.`
+    },
+    {
+      id: 'use-case-diagrams',
+      title: 'Diagramas de Casos de Uso por Módulo',
+      content: `Los casos de uso definen las interacciones que los diferentes actores (roles) pueden tener con el sistema SAAP.\n\n
+**Actor: Administrador**
+El Administrador tiene acceso total al sistema.
+<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>
+        +----------------------------+
+        |  Casos de Uso:             |
+(Admin) |  - Gestionar Usuarios      |-----> (Sistema SAAP)
+  |     |  - Gestionar Roles         |
+  +---- |  - Configurar IA y SMTP    |
+        |  - Ver Auditoría y Métricas|
+        |  - (Hereda todos los       |
+        |     casos de uso de Editor)|
+        +----------------------------+
+</code></pre>
+
+**Actor: Editor / Generador**
+El Editor es el responsable del ciclo de vida de las actas.
+<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>
+        +----------------------------+
+        |  Casos de Uso:             |
+        |  - Crear Nueva Acta        |
+(Editor)|  - Editar Borrador         |-----> (Sistema SAAP)
+  |     |  - Enviar para Aprobación  |
+  +---- |  - Publicar Acta Aprobada  |
+        |  - Ver Todas las Actas     |
+        +----------------------------+
+</code></pre>
+
+**Actor: Aprobador (Circunstancial)**
+Cualquier usuario designado por el Editor para una acta específica.
+<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>
+        +----------------------------+
+        |  Casos de Uso:             |
+(Usuario|  - Revisar Acta Pendiente  |
+Designado)|- Aprobar Acta            |-----> (Sistema SAAP)
+  |     |  - Rechazar Acta (con      |
+  +---- |    motivo)                 |
+        +----------------------------+
+</code></pre>
+
+**Actor: Visor / Público**
+Usuario con permisos de solo lectura para contenido público.
+<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>
+        +----------------------------+
+        |  Casos de Uso:             |
+ (Visor)|  - Ver Repositorio Público |
+   |    |  - Ver Detalle de Acta     |-----> (Sistema SAAP)
+   +--- |    Publicada               |
+        |  - Descargar Acta Pública  |
+        +----------------------------+
+</code></pre>
+`
+    },
+    {
+      id: 'uml-diagrams',
+      title: 'Diagramas UML del Sistema',
+      content: `Los diagramas UML (Lenguaje de Modelado Unificado) ayudan a visualizar el diseño y la estructura del software.\n\n
+**1. Diagrama de Clases (Simplificado)**
+Muestra las entidades principales del sistema y sus relaciones.
+<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>
++----------+ 1      * +----------+
+|   User   |----------| UserRole |
++----------+          +----------+
+    |                      |
+    | 1                    | *
+    |                      v
+    |                  +----------+
+    +------------------|   Role   |
+                       +----------+
+                           | *
+                           |
+                           v
+                       +--------------+
+                       | RolePermission|
+                       +--------------+
+                           | *
+                           |
+                           v
+                       +-------------+
+                       | Permission  |
+                       +-------------+
+
++----------+ 1      * +----------+
+| ActaSummary |----------| Approval |
++----------+          +----------+
+    | 1                      | 1
+    |                        |
+    | *                      v
+    +----------------------|   User   |
+</code></pre>
+*   Un \`User\` puede tener muchos \`Role\` (a través de \`UserRole\`).
+*   Un \`Role\` puede tener muchos \`Permission\` (a través de \`RolePermission\`).
+*   Una \`ActaSummary\` puede tener muchas \`Approval\`.
+*   Cada \`Approval\` está asociada a un \`User\`.\n\n
+
+**2. Diagrama de Secuencia (Creación de Acta)**
+Describe la interacción entre objetos en una línea de tiempo.
+<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>
+Usuario      Frontend      Backend API       Celery           DB
+  |             |               |              |              |
+  | submit()    |               |              |              |
+  |------------>| post(/acta)   |              |              |
+  |             |-------------->|              |              |
+  |             |               | saveMetadata()              |
+  |             |               |--------------------------->|
+  |             |               |              |         ack()|
+  |             |               |<---------------------------|
+  |             |               | queueTask()  |              |
+  |             |               |------------->| process()    |
+  |             |               |              |------------->| (Proceso largo)
+  |             |         ack() |              |              |
+  |             |<--------------|              |              |
+  | displayOK() |               |              |              |
+  |<------------|               |              |              |
+  |             |               |              | updateStatus()
+  |             |               |              |------------->|
+  |             |               |              |         ack()|
+  |             |               |              |<-------------|
+</code></pre>\n
+**3. Diagrama de Actividad (Flujo de Aprobación de Acta)**
+Modela el flujo de trabajo desde un punto de inicio hasta un punto final.
+<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>
+(Inicio)
+   |
+   v
+[Editor envía para Aprobación]
+   |
+   v
+<Acta en estado "Pendiente">
+   |
+   | For each (Aprobador Designado)
+   |   |
+   |   v
+   | [Aprobador Revisa] ----> [Rechaza?] --(Sí)--> [Editor Corrige]
+   |   |                                               ^
+   |  (No)                                             |
+   |   |                                               |
+   |   v                                               |
+   | [Aprobador Aprueba]-------------------------------+
+   |
+   v
+<Todos han Aprobado?> --(No)--> (Vuelve a "Pendiente")
+   |
+  (Sí)
+   |
+   v
+<Acta en estado "Aprobada">
+   |
+   v
+[Editor Publica]
+   |
+   v
+(Fin)
+</code></pre>
+`
+    },
+    {
+      id: 'other-diagrams',
+      title: 'Otros Diagramas de Flujo y Componentes',
+      content: `Estos diagramas adicionales ofrecen perspectivas diferentes y complementarias para entender cómo está construido y cómo funciona el SAAP.\n\n
+**1. Diagrama de Contenedores C4 (Simplificado)**
+Este diagrama se enfoca en las unidades desplegables (contenedores) de la aplicación y sus interacciones.\n
+<pre class="bg-gray-900 text-sm text-cyan-300 p-4 rounded-md overflow-x-auto"><code>
++--------------------------------------------------------+
+|                                                        |
+|  Sistema de Actas Automatizadas del Pastaza (SAAP)     |
+|                                                        |
+| +-------------------+  Lectura/Escritura   +-----------+
+| |                   |--------------------->|           |
+| |  Frontend Web App |                      | Database  |
+| | (React en Navegador)|<---------------------| (PostgreSQL)|
+| |                   |                      |           |
+| +-------------------+  API (HTTPS/JSON)  +-----------+
+|        |       ^                               ^
+|        |       |                               |
+|        v       |                               |
+| +-------------------+                      |
+| |                   |                      |
+| |  API Backend      |----------------------+
+| |  (FastAPI)        |
+| |                   |
+| +-------------------+
+|        |       ^
+|        |       | Tareas Asíncronas
+|        v       |
+| +-------------------+
+| |                   |
+| | Cola de Tareas    |
+| | (Redis)           |
+| |                   |
+| +-------------------+
+|        ^       |
+|        |       |
+|        |       v
+| +-------------------+
+| |                   |
+| |  Worker de IA     |----->[Servicios de IA Externos]
+| | (Celery)          |
+| |                   |
+| +-------------------+
+|                                                        |
++--------------------------------------------------------+
+</code></pre>
+Este diagrama muestra claramente la separación de responsabilidades entre el frontend (interfaz de usuario), el backend (lógica de negocio), y los workers asíncronos (procesamiento pesado).\n\n
+
+**2. Diagrama de Flujo de Componentes del Frontend (React)**
+Este diagrama muestra cómo los componentes principales de React se anidan y comunican entre sí para construir la interfaz de usuario.\n
+<pre class="bg-gray-900 text-sm text-cyan-300 p-4 rounded-md overflow-x-auto"><code>
+App.tsx (Controlador Principal)
+ |
+ +-- LoginScreen.tsx
+ |    |
+ |    +-- KnowledgeBaseModal.tsx
+ |
+ +-- MainLayout.tsx (Layout para vistas autenticadas)
+ |    |
+ |    +-- Dashboard.tsx
+ |    |    |
+ |    |    +-- ReviewModal.tsx
+ |    |    +-- PublishModal.tsx
+ |    |    +-- VersionHistoryModal.tsx
+ |    |
+ |    +-- ActaGeneratorProcess.tsx (Asistente de 7 Pasos)
+ |    |    |
+ |    |    +-- StepIndicator.tsx
+ |    |    +-- Step1Upload.tsx
+ |    |    +-- StepConfiguration.tsx
+ |    |    +-- Step2Processing.tsx
+ |    |    +-- StepVerification.tsx
+ |    |    +-- Step3Template.tsx
+ |    |    +-- Step4Generating.tsx
+ |    |    +-- Step5Editor.tsx
+ |    |
+ |    +-- AdministrationScreen.tsx
+ |         |
+ |         +-- (Navega a ->) UserManager.tsx, TemplateManager.tsx, etc.
+ |
+ +-- ToastContainer.tsx (Notificaciones Globales)
+</code></pre>
+Este árbol de componentes ilustra la jerarquía y cómo el estado principal gestionado en \`App.tsx\` fluye hacia abajo a los componentes hijos a través de props.`
+    },
   ],
   faqs: [
     {
-      id: 'audio-files',
-      title: '¿Qué tipo de archivos de audio puedo subir?',
-      content: 'El sistema es compatible con los formatos de audio más comunes, incluyendo **MP3, WAV, M4A y WEBM**. Para obtener la máxima precisión en la transcripción, recomendamos utilizar grabaciones con la menor cantidad de ruido de fondo posible y con un audio claro y directo de los participantes.'
+      id: 'faq-1',
+      question: '¿Qué formatos de audio son compatibles?',
+      answer: 'El sistema es compatible con los formatos de audio más comunes, incluyendo MP3, WAV, M4A y WEBM. Para mejores resultados, se recomienda audio de buena calidad con el mínimo ruido de fondo.'
     },
     {
-      id: 'asignar-hablantes',
-      title: '¿Cómo se asignan los hablantes correctamente?',
-      content: 'En el primer paso, debes listar a todos los participantes de la reunión. Puedes hacerlo de dos formas: **Entrada Manual**, donde escribes sus datos, o **Usuario del Sistema**, donde los seleccionas de una lista. Es crucial que todos los que hablaron en la sesión estén en esta lista para que la IA pueda identificarlos correctamente.'
+      id: 'faq-2',
+      question: '¿Cuánto tiempo tarda el procesamiento de un audio?',
+      answer: 'El tiempo de procesamiento depende de la duración del audio y de los modelos de IA seleccionados. Como referencia, un audio de 30 minutos puede tardar entre 5 y 10 minutos en ser transcrito. La generación del acta es mucho más rápida, tomando generalmente menos de 2 minutos.'
     },
     {
-      id: 'corregir-transcripcion',
-      title: '¿Qué hago si la transcripción automática tiene errores?',
-      content: 'Ninguna IA es perfecta. Por eso, el **Paso 4: Verificación** es fundamental. En esta pantalla, puedes escuchar el audio mientras lees la transcripción, editar cualquier palabra, corregir los tiempos de inicio y fin de cada intervención, y reasignar un hablante si la IA se equivocó. Todos los cambios se guardan automáticamente.'
+      id: 'faq-3',
+      question: '¿Puedo editar un acta después de haberla enviado para aprobación?',
+      answer: 'No directamente. Una vez que un acta es enviada, se bloquea para edición. Si un aprobador la rechaza, el acta volverá al estado de "Borrador" y podrás editarla nuevamente para incorporar las correcciones solicitadas.'
     },
     {
-      id: 'crear-plantillas',
-      title: '¿Puedo crear mis propias plantillas de actas?',
-      content: 'Sí. Los administradores pueden ir al **Panel de Administración > Gestión de Plantillas** para crear, editar o eliminar plantillas. Una plantilla se compone de varios segmentos, que pueden ser de texto estático o dinámicos, generados por IA a partir de un "prompt" (instrucción) que tú definas.'
+      id: 'faq-4',
+      question: '¿Qué es la "diarización"?',
+      answer: 'La diarización es el proceso de identificar y segmentar el audio para determinar quién habló y cuándo. Es la tecnología que nos permite asignar automáticamente cada fragmento de texto a un participante específico en la transcripción.'
     },
      {
-      id: 'circuito-aprobacion',
-      title: '¿Cómo funciona el circuito de aprobación?',
-      content: 'El flujo es flexible y lo define el generador del acta. En el paso de configuración, el creador del documento elige a uno o varios usuarios del sistema para que sean los aprobadores. El acta no se considerará "Aprobada" hasta que **todos** los usuarios designados le den su visto bueno. Una vez aprobada, solo el generador o un administrador pueden publicarla.'
+      id: 'faq-5',
+      question: '¿Mis datos y audios están seguros?',
+      answer: 'Sí. La seguridad es una prioridad. En un entorno de producción, toda la comunicación está encriptada (HTTPS), y las claves de API y contraseñas se almacenan de forma segura utilizando las mejores prácticas de la industria. Los audios se procesan y pueden ser eliminados de los servidores de IA tras el procesamiento, según las políticas de cada proveedor.'
     },
-    {
-      id: 'seguridad',
-      title: '¿Es seguro el sistema?',
-      content: 'La seguridad es una prioridad. El sistema incluye:\n- **Autenticación de Dos Factores (MFA):** Configurable por el administrador para añadir una capa extra de seguridad al inicio de sesión.\n- **Roles y Permisos:** Un sistema granular que asegura que los usuarios solo puedan ver y hacer lo que su rol les permite.\n- **Registro de Auditoría:** Todas las acciones importantes (creación, edición, aprobación, publicación, cambios en configuración) quedan registradas para su posterior revisión.'
-    }
   ]
 };
 
-const downloadAsTxt = (filename: string, content: string) => {
-    // Create a temporary div to parse potential HTML content and extract text
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = content;
-    const textContent = tempDiv.textContent || tempDiv.innerText || '';
+const DownloadButton: React.FC<{ content: string, title: string }> = ({ content, title }) => {
+    const handleDownload = () => {
+        // Limpiar el contenido de HTML para el archivo de texto
+        const plainText = content
+            .replace(/<pre[^>]*><code>/g, '\n--- CÓDIGO ---\n')
+            .replace(/<\/code><\/pre>/g, '\n--- FIN CÓDIGO ---\n')
+            .replace(/<[^>]+>/g, '') // Eliminar todas las etiquetas HTML
+            .replace(/\*\*(.*?)\*\*/g, '$1') // Quitar negritas
+            .replace(/\*(.*?)\*/g, '$1'); // Quitar cursivas
 
-    const element = document.createElement("a");
-    const file = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
-    element.href = URL.createObjectURL(file);
-    element.download = `${filename.replace(/[\s,]/g, '_')}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-};
+        const blob = new Blob([plainText], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${title.replace(/\s/g, '_')}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
-const AccordionItem: React.FC<{
-    item: { id: string; title: string; content: string };
-    isOpen: boolean;
-    onClick: () => void;
-}> = ({ item, isOpen, onClick }) => {
     return (
-        <div className="border-b border-gray-700">
-            <button onClick={onClick} className="w-full flex justify-between items-center text-left p-4 hover:bg-gray-700/50">
-                <span className="font-semibold text-white">{item.title}</span>
-                <i className={`fas fa-chevron-down text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
-            </button>
-            {isOpen && (
-                <div className="p-4 bg-gray-900/50 animate-fade-in-fast">
-                    <div 
-                        className="text-gray-300 whitespace-pre-line prose prose-invert max-w-none" 
-                        dangerouslySetInnerHTML={{__html: item.content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')}}
-                    ></div>
-                    <button 
-                        onClick={() => downloadAsTxt(item.title, item.content)}
-                        className="mt-4 text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-3 rounded-lg flex items-center gap-2"
-                    >
-                        <i className="fas fa-download"></i> Descargar (.txt)
-                    </button>
-                </div>
-            )}
-        </div>
+        <button onClick={handleDownload} className="text-xs text-gray-400 hover:text-white mt-2 flex items-center gap-2">
+            <i className="fas fa-download"></i> Descargar .txt
+        </button>
     );
 };
 
-interface KnowledgeBaseModalProps {
-    onClose: () => void;
-}
 
-const KnowledgeBaseModal: React.FC<KnowledgeBaseModalProps> = ({ onClose }) => {
+const KnowledgeBaseModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [activeTab, setActiveTab] = useState<'articles' | 'faqs'>('articles');
-    const [openAccordion, setOpenAccordion] = useState<string | null>(null);
+    const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
-    const handleAccordionClick = (id: string) => {
-        setOpenAccordion(openAccordion === id ? null : id);
+    const renderContent = (content: string) => {
+        const htmlContent = content
+            .replace(/\n/g, '<br />')
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/<pre(.*?)><code>(.*?)<\/code><\/pre>/gs, (match, p1, p2) => {
+                 return `<pre${p1}><code>${p2.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`;
+            });
+        return { __html: htmlContent };
     };
 
-    const content = KNOWLEDGE_BASE_CONTENT[activeTab];
+    const toggleItem = (id: string) => {
+        setExpandedItem(expandedItem === id ? null : id);
+    };
 
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 animate-fade-in-fast">
-            <div className="bg-gray-800 rounded-lg shadow-xl border border-gray-700 w-full max-w-4xl h-[90vh] flex flex-col">
-                <header className="flex justify-between items-center p-4 border-b border-gray-700 flex-shrink-0">
+            <div className="bg-gray-800 rounded-lg shadow-xl border border-gray-700 max-w-4xl w-full h-[90vh] flex flex-col">
+                <header className="p-4 border-b border-gray-700 flex justify-between items-center flex-shrink-0">
                     <h2 className="text-xl font-bold text-white flex items-center gap-3">
                         <i className="fas fa-book-open text-purple-400"></i>
-                        Base de Conocimiento del SAAP
+                        Base de Conocimiento
                     </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">&times;</button>
+                    <button onClick={onClose} className="text-gray-400 text-2xl hover:text-white">&times;</button>
                 </header>
                 
-                <div className="flex-shrink-0 border-b border-gray-700">
-                    <nav className="flex space-x-4 px-4">
-                        <button onClick={() => setActiveTab('articles')} className={`py-3 px-1 text-sm font-medium ${activeTab === 'articles' ? 'border-b-2 border-purple-500 text-purple-400' : 'text-gray-400 hover:text-white'}`}>
-                            Artículos
-                        </button>
-                        <button onClick={() => setActiveTab('faqs')} className={`py-3 px-1 text-sm font-medium ${activeTab === 'faqs' ? 'border-b-2 border-purple-500 text-purple-400' : 'text-gray-400 hover:text-white'}`}>
-                            Preguntas Frecuentes
-                        </button>
+                <div className="p-4 flex-shrink-0">
+                     <nav className="flex space-x-4 border-b border-gray-600">
+                        <button onClick={() => setActiveTab('articles')} className={`py-2 px-4 text-sm font-medium ${activeTab === 'articles' ? 'border-b-2 border-purple-500 text-purple-400' : 'text-gray-400 hover:text-white'}`}>Artículos</button>
+                        <button onClick={() => setActiveTab('faqs')} className={`py-2 px-4 text-sm font-medium ${activeTab === 'faqs' ? 'border-b-2 border-purple-500 text-purple-400' : 'text-gray-400 hover:text-white'}`}>Preguntas Frecuentes</button>
                     </nav>
                 </div>
 
-                <main className="overflow-y-auto flex-grow p-2">
-                    {content.map(item => (
-                        <AccordionItem 
-                            key={item.id} 
-                            item={item} 
-                            isOpen={openAccordion === item.id}
-                            onClick={() => handleAccordionClick(item.id)}
-                        />
-                    ))}
-                </main>
-
-                <footer className="p-4 border-t border-gray-700 flex-shrink-0 text-right">
-                    <button onClick={onClose} className="px-5 py-2 text-sm rounded-md bg-gray-600 hover:bg-gray-700">Cerrar</button>
-                </footer>
+                <div className="overflow-y-auto px-6 pb-6 flex-grow">
+                    {activeTab === 'articles' ? (
+                        <div className="space-y-4">
+                            {KNOWLEDGE_BASE_CONTENT.articles.map(item => (
+                                <div key={item.id} className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden">
+                                    <button onClick={() => toggleItem(item.id)} className="w-full text-left p-4 flex justify-between items-center hover:bg-gray-700/50">
+                                        <h3 className="font-semibold text-white">{item.title}</h3>
+                                        <i className={`fas fa-chevron-down transition-transform ${expandedItem === item.id ? 'rotate-180' : ''}`}></i>
+                                    </button>
+                                    {expandedItem === item.id && (
+                                        <div className="p-4 border-t border-gray-700 text-gray-300 text-sm leading-relaxed animate-fade-in">
+                                             <div dangerouslySetInnerHTML={renderContent(item.content)} />
+                                             <DownloadButton content={item.content} title={item.title} />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                         <div className="space-y-4">
+                            {KNOWLEDGE_BASE_CONTENT.faqs.map(item => (
+                                <div key={item.id} className="bg-gray-900/50 rounded-lg border border-gray-700 overflow-hidden">
+                                     <button onClick={() => toggleItem(item.id)} className="w-full text-left p-4 flex justify-between items-center hover:bg-gray-700/50">
+                                        <h3 className="font-semibold text-white">{item.question}</h3>
+                                        <i className={`fas fa-chevron-down transition-transform ${expandedItem === item.id ? 'rotate-180' : ''}`}></i>
+                                    </button>
+                                    {expandedItem === item.id && (
+                                        <div className="p-4 border-t border-gray-700 text-gray-300 text-sm animate-fade-in">
+                                            <p>{item.answer}</p>
+                                            <DownloadButton content={item.answer} title={item.question} />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
