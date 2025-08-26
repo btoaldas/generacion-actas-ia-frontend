@@ -1,0 +1,22 @@
+# backend/requirements.txt
+# Python dependencies for the backend service.
+# Install with: pip install -r requirements.txt
+
+fastapi
+uvicorn[standard] # ASGI server to run FastAPI
+pydantic
+
+# Database driver
+psycopg2-binary
+
+# Asynchronous task queue
+celery
+redis
+
+# Audio processing (stubs for what the backend would need)
+# These libraries have system-level dependencies (like ffmpeg)
+# that must be installed in the Docker container.
+# openai-whisper
+# pyannote.audio
+# ffmpeg-python
+# webrtcvad-wheels
