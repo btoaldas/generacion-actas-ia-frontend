@@ -766,6 +766,88 @@ App.tsx (Controlador Principal)
 </code></pre>
 Este árbol de componentes ilustra la jerarquía y cómo el estado principal gestionado en \`App.tsx\` fluye hacia abajo a los componentes hijos a través de props.`
     },
+     {
+      id: 'db-entity-relationship',
+      title: 'Diagrama Detallado de la Base de Datos (Entidad-Relación)',
+      content: `Este artículo proporciona un diagrama Entidad-Relación (ER) detallado de la base de datos del SAAP, mostrando todas las tablas, sus columnas y las relaciones entre ellas. Sirve como un plano técnico para desarrolladores y administradores de bases de datos.\n\n
+**Leyenda:**
+*   **(PK)**: Llave Primaria
+*   **(FK)**: Llave Foránea
+*   **[tabla]--[relación]--[tabla]**: Indica una relación entre tablas.
+\n\n
+<pre class="bg-gray-900 text-sm text-cyan-300 p-4 rounded-md overflow-x-auto"><code>
++---------------------------+       +---------------------------+       +-------------------------+
+|          users            |       |        user_roles         |       |          roles          |
++---------------------------+       +---------------------------+       +-------------------------+
+| id (PK) TEXT              |-------| user_id (PK, FK)          |       | id (PK) TEXT            |
+| name TEXT                 |       | role_id (PK, FK)          |-------| name TEXT (UNIQUE)      |
+| email TEXT (UNIQUE)       |       +---------------------------+       +-------------------------+
+| cedula TEXT               |                                                   | 1..* (uno a muchos)
+| cargo TEXT                |                                                   |
+| institucion TEXT          |                                           +---------------------------+
++---------------------------+                                           |     role_permissions      |
+           |                                                            +---------------------------+
+           | 1..*                                                       | role_id (PK, FK)          |
+           |                                                            | permission_id (PK, FK)    |
++---------------------------+                                           +---------------------------+
+|        approvals          |                                                   |
++---------------------------+                                                   | 1..*
+| acta_id (PK, FK)          |                                           +-------------------------+
+| user_id (PK, FK)          |                                           |       permissions       |
+| user_name TEXT            |                                           +-------------------------+
+| approved_at TIMESTAMPTZ   |                                           | id (PK) TEXT            |
++---------------------------+                                           | description TEXT        |
+           ^                                                            +-------------------------+
+           | *..1
+           |
++---------------------------+       +---------------------------+
+|          actas            |       |        audit_log          |
++---------------------------+       +---------------------------+
+| id (PK) TEXT              |       | id (PK) TEXT              |
+| title TEXT                |       | timestamp TIMESTAMPTZ     |
+| date DATE                 |       | user_id (FK -> users.id)  |
+| status acta_status_enum   |       | user_name TEXT            |
+| version INTEGER           |       | action TEXT               |
+| full_acta_data JSONB      |       | details TEXT              |
+| created_by TEXT           |       +---------------------------+
+| designated_approver_ids TEXT[]|
+| ...                       |
++---------------------------+
+
+
+// Tablas de Configuración (generalmente no relacionadas directamente con datos transaccionales)
+
++-----------------------------+   +-------------------------------+   +---------------------------+
+|    generation_models        |   |   transcription_models        |   |         templates         |
++-----------------------------+   +-------------------------------+   +---------------------------+
+| id (PK) TEXT                |   | id (PK) TEXT                  |   | id (PK) TEXT              |
+| name TEXT                   |   | name TEXT                     |   | name TEXT                 |
+| provider TEXT               |   | type TEXT                     |   | description TEXT          |
+| model_identifier TEXT       |   | details TEXT                  |   | segments JSONB            |
+| api_key TEXT                |   | diarization TEXT              |   +---------------------------+
+| base_url TEXT               |   | api_key TEXT                  |
++-----------------------------+   | base_url TEXT                 |
+                                  +-------------------------------+
+
++-----------------------------+
+|        system_config        |
++-----------------------------+
+| id (PK) INT (DEFAULT 1)     |
+| institution_name TEXT       |
+| institution_logo TEXT       |
+| is_mfa_enabled BOOLEAN      |
+| session_timeout INT         |
+| ... (campos smtp)           |
++-----------------------------+
+
+</code></pre>
+**Descripción de las Relaciones Clave:**
+*   **Usuarios y Roles (Muchos a Muchos):** Un usuario puede tener múltiples roles, y un rol puede ser asignado a múltiples usuarios. La tabla intermedia \`user_roles\` gestiona esta relación.
+*   **Roles y Permisos (Muchos a Muchos):** Un rol agrupa múltiples permisos, y un mismo permiso puede pertenecer a diferentes roles. La tabla \`role_permissions\` las conecta.
+*   **Actas y Aprobaciones (Uno a Muchos):** Un acta puede tener múltiples aprobaciones, pero cada aprobación pertenece a una sola acta y a un solo usuario.
+*   **Audit Log y Usuarios (Uno a Muchos):** Un usuario puede generar muchas entradas en el registro de auditoría. La relación es opcional (\`ON DELETE SET NULL\`) para que si se elimina un usuario, sus logs no se pierdan, sino que queden como anónimos.
+`
+    },
   ],
   faqs: [
     {
