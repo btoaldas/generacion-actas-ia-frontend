@@ -342,6 +342,145 @@ El Sistema de Actas Automatizadas del Pastaza (SAAP) es una plataforma integral 
 - **Métricas y Auditoría:** Visualizar estadísticas de uso y revisar un registro inmutable de todas las acciones realizadas en la plataforma.\n
 **4. Conclusión**
 SAAP es más que una herramienta de transcripción; es una solución completa de gobernanza digital que asegura que las decisiones y deliberaciones del GAD Municipal sean documentadas con precisión, gestionadas de forma segura y compartidas con transparencia.`
+    },
+    {
+      id: 'backend-conexion',
+      title: 'Conexión con el Backend (FastAPI, PostgreSQL, Celery) y Puesta en Producción',
+      content: `Este artículo es una guía técnica detallada para conectar el frontend de React con un backend robusto construido en Python, y preparar la aplicación para un entorno de producción.\n\n**1. Arquitectura del Backend**\nEl backend se construirá con FastAPI por su alto rendimiento y facilidad de uso. SQLAlchemy se usará como ORM para interactuar con la base de datos PostgreSQL. Celery, con Redis como message broker, manejará las tareas asíncronas.\n\n**Estructura de Directorios (backend):**\n<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>/backend
+|-- app/
+|   |-- __init__.py
+|   |-- main.py        # Entrypoint de la API
+|   |-- crud.py        # Funciones de base de datos (Crear, Leer, Actualizar, Borrar)
+|   |-- models.py      # Modelos de SQLAlchemy (tablas de la base de datos)
+|   |-- schemas.py     # Esquemas de Pydantic (validación de datos de la API)
+|   |-- database.py    # Configuración de la conexión a la base de datos
+|   |-- tasks.py       # Tareas de Celery (procesamiento de IA)
+|   |-- auth.py        # Lógica de autenticación (JWT)
+|-- celery_worker.py # Worker de Celery
+|-- Dockerfile
+|-- requirements.txt
+</code></pre>\n
+**2. Implementación del Backend (Ejemplos Clave)**\n\n**a. Conexión a la Base de Datos (\`database.py\`):**\n<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+</code></pre>\n
+**b. Modelos de SQLAlchemy (\`models.py\`):**\nSe replicaría la estructura del schema.sql usando clases de Python.\n
+**c. Esquemas de Pydantic (\`schemas.py\`):**\nDefinen cómo se ven los datos al entrar y salir de la API.\n<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>from pydantic import BaseModel
+from typing import List
+
+class UserBase(BaseModel):
+    email: str
+    name: str
+
+class User(UserBase):
+    id: str
+    role_ids: List[str]
+    class Config:
+        orm_mode = True
+</code></pre>\n
+**d. Endpoints de la API (\`main.py\`):**\nSe definen las rutas para interactuar con los datos.\n<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>from fastapi import FastAPI, Depends
+from sqlalchemy.orm import Session
+from . import crud, models, schemas
+from .database import SessionLocal, engine
+
+models.Base.metadata.create_all(bind=engine)
+app = FastAPI()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@app.get("/api/users/", response_model=List[schemas.User])
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    users = crud.get_users(db, skip=skip, limit=limit)
+    return users
+</code></pre>\n
+**3. Procesamiento Asíncrono con Celery y Redis**\n\n**a. Definición de Tareas (\`tasks.py\`):**\nLas funciones que tardan mucho (como llamar a Whisper) se definen como tareas de Celery.\n<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>from celery import Celery
+
+celery_app = Celery("tasks", broker="redis://redis:6379/0", backend="redis://redis:6379/0")
+
+@celery_app.task
+def process_audio_task(audio_file_path: str, config: dict):
+    # Aquí iría la lógica real para llamar a Whisper, Pyannote, etc.
+    # ...
+    # Al finalizar, se podría actualizar el estado del acta en la DB
+    # o notificar al frontend vía WebSockets.
+    return {"status": "completed", "transcription_id": "xyz"}
+</code></pre>\n
+**b. Llamada a la Tarea desde la API:**\nEl endpoint de la API no espera a que la tarea termine; solo la pone en cola y devuelve una respuesta inmediata.\n<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>@app.post("/api/actas/process-audio")
+def process_audio_endpoint(file: UploadFile, db: Session = Depends(get_db)):
+    # 1. Guardar el archivo de audio temporalmente
+    file_path = f"/tmp/{file.filename}"
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 2. Poner la tarea en la cola de Celery
+    task = process_audio_task.delay(file_path, {"config": "value"})
+
+    # 3. Devolver el ID de la tarea para que el frontend pueda consultar su estado
+    return {"task_id": task.id}
+</code></pre>\n
+**4. Autenticación con JWT**\nSe reemplaza el login simulado por un sistema basado en tokens. Se crea un endpoint \`/api/token\` que, al recibir un usuario y contraseña válidos, devuelve un token JWT. Este token se debe enviar en la cabecera \`Authorization\` de todas las peticiones subsiguientes a rutas protegidas.\n\n
+**5. Integración Frontend-Backend**\nSe deben reemplazar los datos de estado locales en \`App.tsx\` por llamadas a la API.\n\n**Ejemplo: Cargar actas en el Dashboard**\n<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code>// En App.tsx, dentro de un useEffect
+
+const [actas, setActas] = useState([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() => {
+    const fetchActas = async () => {
+        try {
+            const response = await fetch('/api/actas/'); // Asumiendo que el proxy está configurado
+            const data = await response.json();
+            setActas(data);
+        } catch (error) {
+            console.error("Error al cargar las actas:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    fetchActas();
+}, []);
+</code></pre>\n
+**6. Puesta en Producción con Docker Compose**\nSe usa un archivo \`docker-compose.yml\` para orquestar todos los servicios. Este archivo define el contenedor para el frontend (Nginx), el backend (Uvicorn), la base de datos (PostgreSQL), el broker (Redis) y el worker de Celery.\n<pre class="bg-gray-900 text-sm text-cyan-300 p-2 rounded"><code># docker-compose.prod.yml (versión completa)
+version: '3.8'
+
+services:
+  # ... (servicios de postgres y redis como en la guía de despliegue) ...
+
+  backend:
+    # ... (configuración del backend) ...
+
+  celery_worker:
+    build: ./backend
+    command: celery -A app.tasks.celery_app worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=...
+    depends_on:
+      - redis
+      - postgres
+
+  frontend:
+    build:
+      context: . # Asumiendo que Dockerfile.prod está en la raíz
+      dockerfile: Dockerfile.prod
+    ports:
+      - "80:80"
+
+# ... (volúmenes) ...
+</code></pre>`
     }
   ],
   faqs: [

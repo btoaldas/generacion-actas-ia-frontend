@@ -1,5 +1,5 @@
 {
-  "name": "AI Acta Generator",
+  "name": "Generador de Actas con IA - FrontEnd",
   "description": "A comprehensive system to generate meeting minutes from audio. It transcribes audio, identifies speakers, and uses AI to generate structured meeting minutes based on customizable templates, which can then be edited and exported.",
   "requestFramePermissions": [
     "microphone"
